@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>FARO 2026 · Frame your photo</title>
+<style>
+  :root{
+    --ink:#0b1220;
+    --panel:#121b2e;
+    --panel-2:#1a2740;
+    --line:rgba(255,255,255,0.08);
+    --gold:#c8922a;
+    --teal:#0d9488;
+    --paper:#f4f0e6;
+    --text:#eef1f6;
+    --text-dim:#9aa6bd;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;
+    background:var(--ink);
+    color:var(--text);
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    -webkit-tap-highlight-color:transparent;
+    overscroll-behavior:none;
+  }
+  body{
+    min-height:100vh;
+    min-height:100dvh;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    padding:18px 20px 14px;
+    text-align:center;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, var(--panel), var(--ink));
+  }
+  .topbar .eyebrow{
+    font-size:11px;
+    letter-spacing:.16em;
+    text-transform:uppercase;
+    color:var(--gold);
+    font-weight:600;
+  }
+  .topbar h1{
+    margin:4px 0 0;
+    font-size:20px;
+    font-weight:700;
+    letter-spacing:.01em;
+  }
+  .topbar .sub{
+    margin-top:4px;
+    font-size:12.5px;
+    color:var(--text-dim);
+  }
+
+  /* ---- mode switch ---- */
+  .switch{
+    display:flex;
+    gap:8px;
+    padding:14px 16px 0;
+  }
+  .switch button{
+    flex:1;
+    padding:11px 8px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--text-dim);
+    font-size:13.5px;
+    font-weight:600;
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .switch button.active{
+    background:var(--teal);
+    border-color:var(--teal);
+    color:#fff;
+  }
+
+  main{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    padding:16px;
+    gap:14px;
+  }
+
+  .stage{
+    position:relative;
+    width:100%;
+    aspect-ratio:3/4;
+    background:#000;
+    border-radius:var(--radius);
+    overflow:hidden;
+    border:1px solid var(--line);
+  }
+  .stage video, .stage canvas.preview-canvas{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+  }
+  .stage .placeholder{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:10px;
+    color:var(--text-dim);
+    text-align:center;
+    padding:24px;
+    font-size:13.5px;
+  }
+  .stage .placeholder svg{opacity:.5;}
+
+  /* live frame preview overlay (CSS approximation of the real branded frame) */
+  .frame-overlay{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+  }
+  .frame-overlay .border{
+    position:absolute;
+    inset:0;
+    border:14px solid var(--gold);
+    box-sizing:border-box;
+  }
+  .frame-overlay .corner-badge{
+    position:absolute;
+    top:22px;
+    left:22px;
+    background:rgba(11,18,32,.82);
+    border:1px solid rgba(200,146,42,.5);
+    border-radius:8px;
+    padding:6px 10px;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.04em;
+    color:var(--gold);
+  }
+  .frame-overlay .bottom-bar{
+    position:absolute;
+    left:14px;right:14px;bottom:14px;
+    background:rgba(11,18,32,.82);
+    border-radius:8px;
+    padding:10px 12px;
+    font-size:12.5px;
+    font-weight:600;
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
+  .frame-overlay .bottom-bar .tag{
+    color:var(--teal);
+    font-weight:700;
+  }
+
+  /* ---- controls ---- */
+  .controls{
+    display:flex;
+    gap:10px;
+  }
+  .btn{
+    flex:1;
+    padding:14px 12px;
+    border-radius:12px;
+    border:none;
+    font-size:14.5px;
+    font-weight:700;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    transition:transform .1s ease, opacity .15s ease;
+  }
+  .btn:active{transform:scale(.97);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn-primary{background:var(--teal);color:#fff;}
+  .btn-gold{background:var(--gold);color:#1a1200;}
+  .btn-outline{background:transparent;border:1px solid var(--line);color:var(--text);}
+  .btn-full{width:100%;}
+
+  input[type=file]{display:none;}
+
+  /* ---- result panel ---- */
+  .result-panel{
+    display:none;
+    flex-direction:column;
+    gap:12px;
+  }
+  .result-panel.show{display:flex;}
+  .hashtag-box{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:12px 14px;
+    font-size:13.5px;
+    color:var(--text-dim);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .hashtag-box span{color:var(--text);font-weight:600;}
+  .copy-btn{
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    padding:8px 12px;
+    border-radius:8px;
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .status{
+    text-align:center;
+    font-size:12px;
+    color:var(--text-dim);
+    min-height:16px;
+  }
+
+  footer{
+    padding:14px 16px 22px;
+    text-align:center;
+    font-size:11px;
+    color:var(--text-dim);
+    border-top:1px solid var(--line);
+  }
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="eyebrow">FARO 2026 · Singapore EXPO</div>
+    <h1>Frame your photo</h1>
+    <div class="sub">Shoot live or upload — we'll add the frame and caption</div>
+  </div>
+
+  <div class="switch">
+    <button id="modeLive" class="active">Take live photo</button>
+    <button id="modeUpload">Upload from gallery</button>
+  </div>
+
+  <main>
+
+    <!-- LIVE CAMERA VIEW -->
+    <div id="liveView">
+      <div class="stage" id="liveStage">
+        <div class="placeholder" id="liveStart">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7h3l2-2h6l2 2h3v13H4V7z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          <div>Tap "Start camera" to open your camera with the FARO frame guide.</div>
+        </div>
+        <video id="video" playsinline autoplay muted style="display:none;"></video>
+        <div class="frame-overlay" id="liveFrameOverlay" style="display:none;">
+          <div class="border"></div>
+          <div class="corner-badge">FARO 2026</div>
+          <div class="bottom-bar"><span>Singapore EXPO</span><span class="tag">#FARO2026</span></div>
+        </div>
+      </div>
+      <div class="controls" style="margin-top:10px;">
+        <button class="btn btn-outline btn-full" id="startCamBtn">Start camera</button>
+        <button class="btn btn-gold btn-full" id="shootBtn" style="display:none;">Capture photo</button>
+      </div>
+    </div>
+
+    <!-- UPLOAD VIEW -->
+    <div id="uploadView" style="display:none;">
+      <div class="stage" id="uploadStage">
+        <div class="placeholder" id="uploadPlaceholder">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 16l4-5 3 3 5-6 4 5"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg>
+          <div>Choose a photo from your phone — we'll add the frame automatically.</div>
+        </div>
+        <img id="uploadPreviewImg" style="display:none;width:100%;height:100%;object-fit:cover;">
+      </div>
+      <div class="controls" style="margin-top:10px;">
+        <label class="btn btn-primary btn-full" for="fileInput">Choose photo</label>
+        <input type="file" accept="image/*" id="fileInput">
+      </div>
+    </div>
+
+    <!-- shared: composite canvas, hidden until result ready -->
+    <canvas id="composeCanvas" style="display:none;"></canvas>
+
+    <!-- RESULT -->
+    <div class="result-panel" id="resultPanel">
+      <div class="stage">
+        <canvas class="preview-canvas" id="resultCanvasView"></canvas>
+      </div>
+      <div class="hashtag-box">
+        <span id="hashtagText">#FARO2026 #ESTRO #RadOnc #KCCatFARO</span>
+        <button class="copy-btn" id="copyTagsBtn">Copy tags</button>
+      </div>
+      <div class="controls">
+        <button class="btn btn-primary" id="shareBtn">Share</button>
+        <button class="btn btn-gold" id="downloadBtn">Download</button>
+      </div>
+      <button class="btn btn-outline btn-full" id="retakeBtn">Start over</button>
+      <div class="status" id="statusMsg"></div>
+    </div>
+
+  </main>
+
+  <footer>
+    No photos are uploaded or stored anywhere — everything happens on your phone.
+  </footer>
+
+<script>
+/* ============ CONFIG — swap these for the real assets ============ */
+const CONFIG = {
+  eventLabel: "FARO 2026",
+  eventSub: "Singapore EXPO",
+  hashtags: "#FARO2026 #ESTRO #RadOnc #KCCatFARO",
+  borderColor: "#c8922a",      // gold
+  bottomBarColor: "rgba(11,18,32,0.82)",
+  bottomBarTagColor: "#0d9488", // teal
+  borderWidthRatio: 0.035,      // border thickness as fraction of shorter image side
+  outputSize: 1350              // square-ish export cap, Instagram-friendly
+};
+/* =================================================================== */
+
+const $ = id => document.getElementById(id);
+
+const modeLiveBtn = $("modeLive"), modeUploadBtn = $("modeUpload");
+const liveView = $("liveView"), uploadView = $("uploadView");
+const resultPanel = $("resultPanel");
+const statusMsg = $("statusMsg");
+
+let stream = null;
+let sourceBitmap = null; // ImageBitmap or HTMLImageElement/video frame source for compositing
+
+// ---------- mode switching ----------
+function setMode(mode){
+  const live = mode === "live";
+  modeLiveBtn.classList.toggle("active", live);
+  modeUploadBtn.classList.toggle("active", !live);
+  liveView.style.display = live ? "block" : "none";
+  uploadView.style.display = live ? "none" : "block";
+  resultPanel.classList.remove("show");
+  if(!live) stopCamera();
+}
+modeLiveBtn.addEventListener("click", () => setMode("live"));
+modeUploadBtn.addEventListener("click", () => setMode("upload"));
+
+// ---------- live camera ----------
+const video = $("video");
+async function startCamera(){
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:{ ideal:"environment" }, width:{ideal:1080}, height:{ideal:1440} },
+      audio:false
+    });
+    video.srcObject = stream;
+    video.style.display = "block";
+    $("liveStart").style.display = "none";
+    $("liveFrameOverlay").style.display = "block";
+    $("startCamBtn").style.display = "none";
+    $("shootBtn").style.display = "flex";
+  }catch(err){
+    statusMsg.textContent = "Camera access denied or unavailable — try Upload instead.";
+  }
+}
+function stopCamera(){
+  if(stream){
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+}
+$("startCamBtn").addEventListener("click", startCamera);
+$("shootBtn").addEventListener("click", () => {
+  composeFromSource(video, video.videoWidth, video.videoHeight);
+});
+
+// ---------- upload ----------
+$("fileInput").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const img = new Image();
+  img.onload = () => {
+    $("uploadPreviewImg").src = img.src;
+    $("uploadPreviewImg").style.display = "block";
+    $("uploadPlaceholder").style.display = "none";
+    composeFromSource(img, img.naturalWidth, img.naturalHeight);
+  };
+  img.src = URL.createObjectURL(file);
+});
+
+// ---------- compositing (shared by both modes) ----------
+const composeCanvas = $("composeCanvas");
+const resultCanvasView = $("resultCanvasView");
+
+function composeFromSource(source, srcW, srcH){
+  if(!srcW || !srcH){ statusMsg.textContent = "Could not read photo — try again."; return; }
+
+  // crop to a portrait 3:4 frame from the center, capped at CONFIG.outputSize
+  const targetRatio = 3/4;
+  let cropW = srcW, cropH = srcW / targetRatio;
+  if(cropH > srcH){ cropH = srcH; cropW = srcH * targetRatio; }
+  const cropX = (srcW - cropW) / 2;
+  const cropY = (srcH - cropH) / 2;
+
+  const outW = Math.min(CONFIG.outputSize, cropW);
+  const outH = outW / targetRatio;
+
+  composeCanvas.width = outW;
+  composeCanvas.height = outH;
+  const ctx = composeCanvas.getContext("2d");
+
+  // mirror correction not needed (rear camera / gallery photos aren't mirrored)
+  ctx.drawImage(source, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
+
+  // ---- draw frame ----
+  const border = Math.round(outW * CONFIG.borderWidthRatio);
+  ctx.strokeStyle = CONFIG.borderColor;
+  ctx.lineWidth = border;
+  ctx.strokeRect(border/2, border/2, outW - border, outH - border);
+
+  // corner badge
+  ctx.font = `700 ${Math.round(outW*0.032)}px Segoe UI, sans-serif`;
+  const badgeText = CONFIG.eventLabel;
+  const badgePad = outW * 0.02;
+  const badgeW = ctx.measureText(badgeText).width + badgePad*2;
+  const badgeH = outW * 0.06;
+  const badgeX = border + outW*0.03;
+  const badgeY = border + outW*0.03;
+  ctx.fillStyle = "rgba(11,18,32,0.82)";
+  roundRect(ctx, badgeX, badgeY, badgeW, badgeH, 6);
+  ctx.fill();
+  ctx.fillStyle = CONFIG.borderColor;
+  ctx.textBaseline = "middle";
+  ctx.fillText(badgeText, badgeX + badgePad, badgeY + badgeH/2);
+
+  // bottom bar
+  const barH = outW * 0.09;
+  const barX = border + outW*0.02;
+  const barY = outH - border - outW*0.02 - barH;
+  const barW = outW - border*2 - outW*0.04;
+  ctx.fillStyle = CONFIG.bottomBarColor;
+  roundRect(ctx, barX, barY, barW, barH, 8);
+  ctx.fill();
+
+  ctx.font = `600 ${Math.round(outW*0.036)}px Segoe UI, sans-serif`;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(CONFIG.eventSub, barX + outW*0.025, barY + barH/2);
+
+  ctx.font = `700 ${Math.round(outW*0.034)}px Segoe UI, sans-serif`;
+  ctx.fillStyle = CONFIG.bottomBarTagColor;
+  const tagLabel = "#FARO2026";
+  const tagWidth = ctx.measureText(tagLabel).width;
+  ctx.fillText(tagLabel, barX + barW - tagWidth - outW*0.025, barY + barH/2);
+
+  showResult();
+}
+
+function roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+
+// ---------- result panel ----------
+function showResult(){
+  resultCanvasView.width = composeCanvas.width;
+  resultCanvasView.height = composeCanvas.height;
+  resultCanvasView.getContext("2d").drawImage(composeCanvas, 0, 0);
+  resultPanel.classList.add("show");
+  $("hashtagText").textContent = CONFIG.hashtags;
+  statusMsg.textContent = "";
+  stopCamera();
+  resultPanel.scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+$("retakeBtn").addEventListener("click", () => {
+  resultPanel.classList.remove("show");
+  $("fileInput").value = "";
+  $("uploadPreviewImg").style.display = "none";
+  $("uploadPlaceholder").style.display = "flex";
+  $("liveStart").style.display = "flex";
+  $("liveFrameOverlay").style.display = "none";
+  video.style.display = "none";
+  $("startCamBtn").style.display = "flex";
+  $("shootBtn").style.display = "none";
+});
+
+$("copyTagsBtn").addEventListener("click", async () => {
+  try{
+    await navigator.clipboard.writeText(CONFIG.hashtags);
+    statusMsg.textContent = "Hashtags copied — paste into your caption.";
+  }catch{
+    statusMsg.textContent = "Couldn't copy — select and copy the text above.";
+  }
+});
+
+$("downloadBtn").addEventListener("click", () => {
+  composeCanvas.toBlob((blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "faro2026-photo.jpg";
+    a.click();
+    URL.revokeObjectURL(url);
+    statusMsg.textContent = "Saved to your downloads / photos.";
+  }, "image/jpeg", 0.92);
+});
+
+$("shareBtn").addEventListener("click", async () => {
+  composeCanvas.toBlob(async (blob) => {
+    const file = new File([blob], "faro2026-photo.jpg", { type:"image/jpeg" });
+    if(navigator.share && navigator.canShare && navigator.canShare({ files:[file] })){
+      try{
+        await navigator.share({
+          files:[file],
+          text: CONFIG.hashtags
+        });
+      }catch(e){ /* user cancelled */ }
+    }else{
+      statusMsg.textContent = "Sharing isn't supported on this browser — use Download, then post manually.";
+    }
+  }, "image/jpeg", 0.92);
+});
+</script>
+</body>
+</html>
