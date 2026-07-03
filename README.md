@@ -1,0 +1,2 @@
+# faro-photo
+Photo-booth
